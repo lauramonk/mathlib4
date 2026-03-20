@@ -300,6 +300,10 @@ lemma isLoopAt_iff_inc_not_isNonloopAt : G.IsLoopAt e x ↔ G.Inc e x ∧ ¬ G.I
 lemma Inc.isLoopAt_or_isNonloopAt (h : G.Inc e x) : G.IsLoopAt e x ∨ G.IsNonloopAt e x := by
   simp [isNonloopAt_iff_inc_not_isLoopAt, h, em]
 
+lemma IsLink.eq_loop {x x' : α} {e : β} (h : G.IsLoopAt e x) (h' : G.IsLoopAt e x') : x = x' := by
+  rcases h.left_eq_or_eq h' with (rfl | rfl) <;> rfl
+
+
 /-! ### Adjacency -/
 
 /-- `G.Adj x y` means that `G` has an edge whose ends are the vertices `x` and `y`. -/
