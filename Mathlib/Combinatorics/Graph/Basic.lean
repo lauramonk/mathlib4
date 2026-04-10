@@ -76,38 +76,75 @@ variable {α β : Type*} {x y z u v w : α} {e f : β}
 
 open Set
 
-/-- A multigraph with vertices of type `α` and edges of type `β`,
-as described by vertex and edge sets `vertexSet : Set α` and `edgeSet : Set β`,
-and a predicate `IsLink` describing whether an edge `e : β` has vertices `x y : α` as its ends.
-
-The `edgeSet` structure field can be inferred from `IsLink`
-via `edge_mem_iff_exists_isLink` (and this structure provides default values
-for `edgeSet` and `edge_mem_iff_exists_isLink` that use `IsLink`).
-While the field is not strictly necessary, when defining a graph we often
-immediately know what the edge set should be,
-and furthermore having `edgeSet` separate can be convenient for
-definitional equality reasons.
+/-- A multigraph with vertices of type `α` and half-edges of type `β`,
+as described by vertex and half-edge sets `vertexSet : Set α` and `halfEdgeSet : Set β`,
+an involution `link` describing which half-edges are connected, and a map `basePt : β → α`
+giving a base-point to each half-edge.
 -/
 structure Graph (α β : Type*) where
-  /-- The vertex set. -/
+  /-- The `vertexSet` is the set of vertices of the graph. -/
   vertexSet : Set α
-  /-- The binary incidence predicate, stating that `x` and `y` are the ends of an edge `e`.
-  If `G.IsLink e x y` then we refer to `e` as `edge` and `x` and `y` as `left` and `right`. -/
-  IsLink : β → α → α → Prop
-  /-- The edge set. -/
-  edgeSet : Set β := {e | ∃ x y, IsLink e x y}
-  /-- If `e` goes from `x` to `y`, it goes from `y` to `x`. -/
-  isLink_symm : ∀ ⦃e⦄, e ∈ edgeSet → (Symmetric <| IsLink e)
-  /-- An edge is incident with at most one pair of vertices. -/
-  eq_or_eq_of_isLink_of_isLink : ∀ ⦃e x y v w⦄, IsLink e x y → IsLink e v w → x = v ∨ x = w
-  /-- An edge `e` is incident to something if and only if `e` is in the edge set. -/
-  edge_mem_iff_exists_isLink : ∀ e, e ∈ edgeSet ↔ ∃ x y, IsLink e x y := by exact fun _ ↦ Iff.rfl
-  /-- If some edge `e` is incident to `x`, then `x ∈ V`. -/
-  left_mem_of_isLink : ∀ ⦃e x y⦄, IsLink e x y → x ∈ vertexSet
-
-initialize_simps_projections Graph (IsLink → isLink)
+  /-- The `halfEdgeSet` is the set of half-edges from which the graph is made. -/
+  halfEdgeSet : Set β
+  /-- Each half-edge is based at a vertex. -/
+  basePt : β → α
+  /-- The basepoint of a half-edge is always a vertex. -/
+  basePt_mem {a : β} (h : a ∈ halfEdgeSet) : basePt a ∈ vertexSet
+  /-- The involution `link` connects half-edges which correspond to edges in the graph. -/
+  link : β → β
+  link_invol {a : β} : link (link a) = a
+  /-- A half-edge is never paired to itself. -/
+  link_irrefl {a : β} (h : a ∈ halfEdgeSet) : link a ≠ a
+  /-- Any half-edge in `halfEdgeSet` is paired with a half-edge in `halfEdgeSet`. -/
+  link_mem {a : β} (h : a ∈ halfEdgeSet) : link a ∈ halfEdgeSet
 
 namespace Graph
+
+variable (G : Graph α β)
+
+/-- The `endPt` of a half-edge is the basepoint of the half-edge it is linked to. -/
+def endPt (d : β) : α := G.basePt (G.link d)
+
+/-- The endpoint of a half-edge is a vertex. -/
+lemma endPt_mem {d : β} (h : d ∈ G.halfEdgeSet) : G.endPt d ∈ G.vertexSet :=
+  G.basePt_mem (G.link_mem h)
+
+/-- The `edgeSet` of a graph is its set of un-ordered paired half-edges. -/
+def edgeSet : Set (Sym2 β) := {s(d, G.link d) | d ∈ G.halfEdgeSet}
+
+/-- The binary incidence predicate, stating that `x` and `y` are the ends of an edge `e`. -/
+def IsLink (e : Sym2 β) (x y : α) : Prop :=
+  ∃ d : β, e = s(d, G.link d) ∧ d ∈ G.halfEdgeSet ∧ s(x, y) = s(G.basePt d, G.endPt d)
+
+/-- If `e` goes from `x` to `y`, it goes from `y` to `x`. -/
+lemma isLink_symm : ∀ ⦃e⦄, e ∈ G.edgeSet → (Symmetric <| G.IsLink e) := by
+  intro _ _ _ _ h
+  obtain ⟨d, hd, hmem, hends⟩ := h
+  rw [Sym2.eq_swap] at hends
+  exact ⟨d, hd, hmem, hends⟩
+
+/-- An edge `e` is incident to something if and only if `e` is in the edge set. -/
+lemma edge_mem_iff_exists_isLink : ∀ e, e ∈ G.edgeSet ↔ ∃ x y, G.IsLink e x y := by
+  intro e
+  constructor
+  · intro he
+    obtain ⟨d, hmem, h⟩ := he
+    use G.basePt d, G.endPt d, d
+    exact ⟨symm h, hmem, rfl⟩
+  · intro he
+    obtain ⟨x, y, hxy⟩ := he
+    obtain ⟨d, h, hmem, _⟩ := hxy
+    use d
+    exact ⟨hmem, symm h⟩
+
+/-- If an edge `e` links `x` to `y` then `x` is a vertex. -/
+lemma left_mem_of_isLink {e : Sym2 β} {x y : α} (h : G.IsLink e x y) : x ∈ G.vertexSet := by
+  obtain ⟨d, hd⟩ := h
+  sorry
+
+/-- An edge is incident with at most one pair of vertices. -/
+lemma eq_or_eq_of_isLink_of_isLink {e : Sym2 β} {x y v w : α} (h : G.IsLink e x y)
+  (h' : G.IsLink e v w) : x = v ∨ x = w := by sorry
 
 variable {G H : Graph α β}
 
@@ -119,8 +156,10 @@ scoped notation "E(" G ")" => Graph.edgeSet G
 
 /-! ### Edge-vertex-vertex incidence -/
 
+variable {e f : Sym2 β} {x y : α}
+
 lemma IsLink.edge_mem (h : G.IsLink e x y) : e ∈ E(G) :=
-  (edge_mem_iff_exists_isLink ..).2 ⟨x, y, h⟩
+   (edge_mem_iff_exists_isLink ..).2 ⟨x, y, h⟩
 
 @[simp]
 lemma not_isLink_of_notMem_edgeSet (he : e ∉ E(G)) : ¬ G.IsLink e x y :=
@@ -184,7 +223,7 @@ lemma IsLink.isLink_iff_sym2_eq (h : G.IsLink e x y) {x' y' : α} :
 /-- The unary incidence predicate of `G`. `G.Inc e x` means that the vertex `x`
 is one or both of the ends of the edge `e`.
 In the `Inc` namespace, we use `edge` and `vertex` to refer to `e` and `x`. -/
-def Inc (G : Graph α β) (e : β) (x : α) : Prop := ∃ y, G.IsLink e x y
+def Inc (G : Graph α β) (e : Sym2 β) (x : α) : Prop := ∃ y, G.IsLink e x y
 
 -- Cannot be @[simp] because `x` cannot be inferred by `simp`.
 lemma Inc.edge_mem (h : G.Inc e x) : e ∈ E(G) :=
@@ -253,7 +292,7 @@ lemma inc_eq_inc_iff_isLink_eq_isLink {G₁ G₂ : Graph α β} :
   · simp [funext_iff, Inc, h]
 
 /-- `G.IsLoopAt e x` means that both ends of the edge `e` are equal to the vertex `x`. -/
-def IsLoopAt (G : Graph α β) (e : β) (x : α) : Prop := G.IsLink e x x
+def IsLoopAt (G : Graph α β) (e : Sym2 β) (x : α) : Prop := G.IsLink e x x
 
 @[simp]
 lemma isLink_self_iff : G.IsLink e x x ↔ G.IsLoopAt e x := Iff.rfl
@@ -275,7 +314,7 @@ lemma IsLoopAt.vertex_mem (h : G.IsLoopAt e x) : x ∈ V(G) :=
 /-- `G.IsNonloopAt e x` means that the vertex `x` is one but not both of the ends of the edge =`e`,
 or equivalently that `e` is incident with `x` but not a loop at `x` -
 see `Graph.isNonloopAt_iff_inc_not_isLoopAt`. -/
-def IsNonloopAt (G : Graph α β) (e : β) (x : α) : Prop := ∃ y ≠ x, G.IsLink e x y
+def IsNonloopAt (G : Graph α β) (e : Sym2 β) (x : α) : Prop := ∃ y ≠ x, G.IsLink e x y
 
 lemma IsNonloopAt.inc (h : G.IsNonloopAt e x) : G.Inc e x :=
   h.choose_spec.2.inc_left
