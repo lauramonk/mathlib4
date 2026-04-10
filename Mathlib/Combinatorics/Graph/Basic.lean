@@ -505,16 +505,19 @@ lemma IsNonloopAt.of_compatible (hGH : G.Compatible H) (heH : e ∈ E(H)) (h : G
 
 /-! ### Graphs with no edges -/
 
+variable [Inhabited α]
+
 /-- The graph with vertex set `vertexSet` and no edges -/
 @[simps (attr := grind =)]
 def noEdge (vertexSet : Set α) (β : Type*) : Graph α β where
   vertexSet := vertexSet
-  edgeSet := ∅
-  IsLink _ _ _ := False
-  isLink_symm := by simp
-  eq_or_eq_of_isLink_of_isLink := by simp
-  edge_mem_iff_exists_isLink := by simp
-  left_mem_of_isLink := by simp
+  halfEdgeSet := ∅
+  link (d : β) := d
+  link_invol := rfl
+  link_irrefl := fun _ _ => by contradiction
+  link_mem := by intro _ h; exact h
+  basePt (d : β) : α := default
+  basePt_mem := by intro _ _; contradiction
 
 variable {vertexSet : Set α} {edgeSet : Set β}
 
